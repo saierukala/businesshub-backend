@@ -1,14 +1,5 @@
 import { z } from 'zod';
-import { pagination, uuid } from '../validation/common';
-
-// "  kondapur " -> "Kondapur". Areas are matched against technician service areas later,
-// so one spelling per area matters.
-const area = z
-  .string()
-  .trim()
-  .min(2)
-  .max(60)
-  .transform((v) => v.replace(/\s+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()));
+import { area, pagination, uuid } from '../validation/common';
 
 const fields = {
   label: z.string().trim().min(1).max(40),

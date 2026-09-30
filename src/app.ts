@@ -13,6 +13,7 @@ import { customersRouter } from './routes/customers';
 import { addressesRouter } from './routes/addresses';
 import { appliancesRouter } from './routes/appliances';
 import { usersRouter } from './routes/users';
+import { techniciansRouter } from './routes/technicians';
 
 export function createApp() {
   const app = express();
@@ -32,7 +33,8 @@ export function createApp() {
   app.use('/addresses', addressesRouter);
   app.use('/appliances', appliancesRouter);
   app.use('/users', usersRouter);
-  // Later phases mount: /technicians, /bookings, ...
+  app.use('/technicians', techniciansRouter);
+  // Later phases mount: /bookings, ...
 
   app.use(notFound);
   app.use(errorHandler);

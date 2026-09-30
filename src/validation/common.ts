@@ -32,3 +32,12 @@ export const pagination = z.object({
 
 // Query strings are text: accept "true"/"false".
 export const queryBool = z.enum(['true', 'false']).transform((v) => v === 'true');
+
+// "  kondapur " -> "Kondapur". Address areas are matched against technician service areas,
+// so there must be one spelling per area.
+export const area = z
+  .string()
+  .trim()
+  .min(2)
+  .max(60)
+  .transform((v) => v.replace(/\s+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()));
