@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import * as create from '../services/booking.service';
 import * as actions from '../services/booking.actions';
+import * as assign from '../services/booking.assign';
 import * as query from '../services/booking.query';
 import type * as s from '../routes/bookings.schemas';
 
@@ -26,6 +27,14 @@ export async function reschedule(req: Request, res: Response) {
 
 export async function cancel(req: Request, res: Response) {
   res.json(await actions.cancelBooking(req.user!, id(req), body<s.CancelBookingBody>(req)));
+}
+
+export async function assignableTechnicians(req: Request, res: Response) {
+  res.json(await assign.listAssignableTechnicians(req.user!, id(req)));
+}
+
+export async function assignTechnician(req: Request, res: Response) {
+  res.json(await assign.assignTechnician(req.user!, id(req), body<s.AssignBookingBody>(req)));
 }
 
 export async function noShow(req: Request, res: Response) {

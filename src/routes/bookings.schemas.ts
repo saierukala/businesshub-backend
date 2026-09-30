@@ -30,12 +30,16 @@ export const cancelBookingBody = z.object({
 
 export const noShowBody = z.object({ note: z.string().trim().max(300).optional() });
 
+// Staff: give a booking a technician, or change it. Must be one from GET /bookings/:id/technicians.
+export const assignBookingBody = z.object({ technicianId: uuid, note: z.string().trim().max(300).optional() });
+
 export const listBookingsQuery = pagination.extend({
   status: z.enum(['PENDING', 'CONFIRMED', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW']).optional(),
   // staff filters (ignored for customers, who only ever see their own)
   customerId: uuid.optional(),
   technicianId: uuid.optional(),
   needsReassignment: queryBool.optional(),
+  sort: z.enum(['newest', 'soonest']).default('newest'), // soonest = earliest visit first (the reassignment queue)
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // IST calendar days, inclusive
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
@@ -44,4 +48,5 @@ export type CreateBookingBody = z.infer<typeof createBookingBody>;
 export type RescheduleBookingBody = z.infer<typeof rescheduleBookingBody>;
 export type CancelBookingBody = z.infer<typeof cancelBookingBody>;
 export type NoShowBody = z.infer<typeof noShowBody>;
+export type AssignBookingBody = z.infer<typeof assignBookingBody>;
 export type ListBookingsQuery = z.infer<typeof listBookingsQuery>;

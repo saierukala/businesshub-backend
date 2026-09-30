@@ -12,6 +12,20 @@ Customers, Owner and Manager use the same endpoints (technicians get 403 until P
 | POST | `/bookings/:id/cancel` | customer (own), staff | `{ reason?, overrideReason? }` |
 | POST | `/bookings/:id/no-show` | staff | `{ note? }` from ASSIGNED / EN_ROUTE / ARRIVED |
 
+## Assignment (Phase 7, Owner/Manager only)
+| Method | Path | What |
+| --- | --- | --- |
+| GET | `/bookings/:id/technicians` | Free qualified technicians for this booking's time: `{ items: [{ id, name, isCurrent }] }`, fewest bookings that day first |
+| POST | `/bookings/:id/assign` | `{ technicianId, note? }` |
+
+- Works while the booking is `CONFIRMED` (becomes `ASSIGNED`) or `ASSIGNED` (technician swapped, status stays). Any other status: `409 INVALID_TRANSITION`.
+- The technician must be in the free list (active, skilled, covers the area, inside hours, no time off, no overlapping booking; the booking's own slot does not
+  block its current technician). Otherwise `409 SLOT_UNAVAILABLE`. The database constraint still decides if two managers race.
+- Assigning clears `needsReassignment`. History gets a row (`CONFIRMED -> ASSIGNED`, or `ASSIGNED -> ASSIGNED` with "Reassigned from X to Y"); audit `TECHNICIAN_ASSIGNED` / `TECHNICIAN_REASSIGNED`.
+- **Needs reassignment queue:** `GET /bookings?needsReassignment=true&sort=soonest`. Time off flags active bookings (audit `BOOKING_FLAGGED_REASSIGNMENT` per booking);
+  assigning, rescheduling, cancelling, no-show and completing all clear the flag.
+- `GET /bookings` also takes `sort=newest|soonest` (default `newest`).
+
 ## Create
 ```json
 { "applianceId": "", "serviceId": "", "addressId": "", "problemDescription": "Not cooling",

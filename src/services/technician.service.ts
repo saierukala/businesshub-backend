@@ -112,7 +112,7 @@ export async function createTimeOff(actorId: string, id: string, input: CreateTi
 
     // Bookings already inside the time off are never deleted or moved. They are flagged, and the
     // manager reassigns or reschedules them (spec §7). Finished or cancelled ones are left alone.
-    const flagged = await tx.booking.updateMany({
+    const toFlag = await tx.booking.findMany({
       where: {
         technicianId: id,
         status: { notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] },
@@ -120,8 +120,19 @@ export async function createTimeOff(actorId: string, id: string, input: CreateTi
         endAt: { gt: row.startAt },
         needsReassignment: false,
       },
+      select: { id: true },
+    });
+    const flagged = await tx.booking.updateMany({
+      where: { id: { in: toFlag.map((b) => b.id) } },
       data: { needsReassignment: true },
     });
+    // One audit row per booking, so each booking's own history shows why it needs a new technician.
+    for (const b of toFlag) {
+      await writeAudit(
+        { userId: actorId, action: 'BOOKING_FLAGGED_REASSIGNMENT', entityType: 'Booking', entityId: b.id, metadata: { technicianId: id, timeOffId: row.id } },
+        tx,
+      );
+    }
 
     await writeAudit(
       {

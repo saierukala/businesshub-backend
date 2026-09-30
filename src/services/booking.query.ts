@@ -27,7 +27,7 @@ export async function listBookings(actor: Actor, q: ListBookingsQuery) {
   }
 
   const [items, total] = await Promise.all([
-    prisma.booking.findMany({ where, include: bookingInclude, orderBy: { startAt: 'desc' }, ...pageArgs(q) }),
+    prisma.booking.findMany({ where, include: bookingInclude, orderBy: { startAt: q.sort === 'soonest' ? 'asc' : 'desc' }, ...pageArgs(q) }),
     prisma.booking.count({ where }),
   ]);
   return toPage(items.map(bookingView), total, q);

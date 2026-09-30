@@ -14,4 +14,6 @@ bookingsRouter.post('/', validate({ body: s.createBookingBody }), c.createBookin
 bookingsRouter.get('/:id', validate({ params: idParams }), c.get);
 bookingsRouter.post('/:id/reschedule', validate({ params: idParams, body: s.rescheduleBookingBody }), c.reschedule);
 bookingsRouter.post('/:id/cancel', validate({ params: idParams, body: s.cancelBookingBody }), c.cancel);
+bookingsRouter.get('/:id/technicians', requireRole('OWNER', 'MANAGER'), validate({ params: idParams }), c.assignableTechnicians);
+bookingsRouter.post('/:id/assign', requireRole('OWNER', 'MANAGER'), validate({ params: idParams, body: s.assignBookingBody }), c.assignTechnician);
 bookingsRouter.post('/:id/no-show', requireRole('OWNER', 'MANAGER'), validate({ params: idParams, body: s.noShowBody }), c.noShow);

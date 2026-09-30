@@ -32,8 +32,11 @@ type Change = {
   note?: string;
   auditAction: string;
   metadata?: Prisma.InputJsonObject;
-  data?: Prisma.BookingUpdateManyMutationInput; // extra columns to change in the same update
+  data?: Prisma.BookingUncheckedUpdateManyInput; // extra columns to change in the same update
 };
+
+// A booking that is over no longer needs a new technician, so it leaves the "Needs reassignment" queue.
+const ENDED: BookingStatus[] = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
 // Every status change goes through here, inside a transaction: check the map, update, then write
 // BookingStatusHistory and AuditLog (spec rule 7).
@@ -43,7 +46,7 @@ export async function changeStatus(tx: Prisma.TransactionClient, c: Change) {
   // "where status = from" makes a second request that raced us fail instead of overwriting.
   const { count } = await tx.booking.updateMany({
     where: { id: c.booking.id, status: c.booking.status },
-    data: { ...c.data, status: c.to },
+    data: { ...c.data, status: c.to, ...(ENDED.includes(c.to) && { needsReassignment: false }) },
   });
   if (count === 0) throw new AppError(409, 'INVALID_TRANSITION', 'This booking was just changed by someone else. Reload and try again.');
 
