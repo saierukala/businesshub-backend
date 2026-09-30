@@ -3,7 +3,7 @@ import request from 'supertest';
 import { prisma } from '../db/prisma';
 import { resetDb } from '../test/db';
 import { actor, app } from '../test/http';
-import { at, bookingBody, makeWorld, monday, type World } from '../test/world';
+import { at, bookingBody, date, makeWorld, monday, type World } from '../test/world';
 import { cancelBooking } from '../services/booking.actions';
 import { createBooking, rescheduleBooking } from '../services/booking.service';
 
@@ -249,6 +249,34 @@ describe('reschedule', () => {
     const b = await book('10:00');
     expect((await move(b.id, '10:30')).status).toBe(200); // 10:30-11:30 overlaps its own 10:00-11:00
     expect((await move(b.id, '10:30')).status).toBe(400); // same time again
+  });
+
+  it('availability with excludeBookingId offers the small shifts the move would accept', async () => {
+    const b = await book('10:00');
+    const day = `/availability?serviceId=${w.serviceId}&date=${date}&area=Kondapur`;
+    const starts = (res: { body: { slots: { startAt: string }[] } }) => res.body.slots.map((s) => s.startAt);
+
+    // Without it, the booking's own 10:00-11:00 blocks 09:30, 10:00 and 10:30 (the only technician is busy).
+    const plain = starts(await w.customer.agent.get(day));
+    expect(plain).not.toContain(at('10:30').toISOString());
+    expect(plain).not.toContain(at('09:30').toISOString());
+
+    const withIt = starts(await w.customer.agent.get(`${day}&excludeBookingId=${b.id}`));
+    expect(withIt).toContain(at('10:30').toISOString());
+    expect(withIt).toContain(at('09:30').toISOString());
+    expect((await move(b.id, '10:30')).status).toBe(200); // and the move really is accepted
+  });
+
+  it('excludeBookingId is checked: not your booking is 404, another service is 400', async () => {
+    const b = await book('10:00');
+    const other = await w.addCustomer();
+    const q = `/availability?serviceId=${w.serviceId}&date=${date}&area=Kondapur&excludeBookingId=${b.id}`;
+    expect((await other.agent.get(q)).status).toBe(404);
+
+    const tv = await prisma.serviceCategory.create({ data: { name: 'TV' } });
+    const tvService = await prisma.service.create({ data: { categoryId: tv.id, name: 'TV Repair', durationMinutes: 60, basePrice: 449 } });
+    const wrong = q.replace(w.serviceId, tvService.id);
+    expect((await w.customer.agent.get(wrong)).status).toBe(400);
   });
 
   it('a taken slot is 409 and leaves the booking unchanged', async () => {

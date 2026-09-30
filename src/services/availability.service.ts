@@ -3,6 +3,7 @@ import type { Role, Service } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { AppError } from '../errors/AppError';
 import { BUSINESS_TZ, computeSlots, type Slot, type TechnicianInput } from './availability.compute';
+import { findBookingFor } from './booking.shared';
 import type { AvailabilityQuery } from '../routes/availability.schemas';
 
 export type SlotMode = 'customer' | 'staff';
@@ -88,12 +89,25 @@ export async function loadSlots(p: {
 // Mode comes from the caller's ROLE, never from the request: a customer cannot ask for staff mode.
 export const modeFor = (role: Role): SlotMode => (role === 'OWNER' || role === 'MANAGER' ? 'staff' : 'customer');
 
-export async function getAvailability(role: Role, q: AvailabilityQuery, now = new Date()) {
+export async function getAvailability(actor: { id: string; role: Role }, q: AvailabilityQuery, now = new Date()) {
   const service = await prisma.service.findUnique({ where: { id: q.serviceId } });
   if (!service || !service.active) throw AppError.notFound('Service not found');
 
+  // Rescheduling: the booking being moved must not block its own current time, so small shifts
+  // (10:00 -> 10:30) are offered. The caller must be allowed to see that booking (a customer's
+  // neighbour gets 404), and it must be for this service.
+  let excludeBookingId: string | undefined;
+  if (q.excludeBookingId) {
+    const booking = await findBookingFor(actor, q.excludeBookingId);
+    if (booking.serviceId !== service.id) {
+      throw AppError.badRequest('That booking is for a different service', [{ path: 'excludeBookingId', message: 'Not for this service' }]);
+    }
+    excludeBookingId = booking.id;
+  }
+
+  const role = actor.role;
   const mode = modeFor(role);
-  const { slots, names } = await loadSlots({ service, area: q.area, date: q.date, mode, now });
+  const { slots, names } = await loadSlots({ service, area: q.area, date: q.date, mode, now, excludeBookingId });
 
   return {
     date: q.date,

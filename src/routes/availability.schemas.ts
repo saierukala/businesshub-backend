@@ -10,6 +10,7 @@ export const availabilityQuery = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
     .refine((v) => DateTime.fromISO(v).isValid, 'Not a real date'),
   area, // the area of the customer's address, e.g. Kondapur
+  excludeBookingId: uuid.optional(), // when rescheduling: this booking's own slot does not block
 });
 
 export type AvailabilityQuery = z.infer<typeof availabilityQuery>;

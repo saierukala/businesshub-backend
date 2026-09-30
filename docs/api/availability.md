@@ -6,6 +6,11 @@ Roles: Customer, Owner, Manager (technicians get 403). `date` is a calendar day 
 `area` is the area of the address being booked (spelling is normalised like address areas).
 The mode comes from the caller's **role**, never from a parameter.
 
+Optional `excludeBookingId=<uuid>`: used when rescheduling. That booking's own current time does not block, so
+small shifts (10:00 -> 10:30) are offered. The caller must be allowed to see the booking (someone else's is 404),
+and it must be for the same `serviceId` (otherwise 400). Its current start time is still returned as free;
+the client should not offer it again.
+
 ```json
 {
   "date": "2026-10-05",
