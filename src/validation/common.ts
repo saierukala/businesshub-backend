@@ -41,3 +41,9 @@ export const area = z
   .min(2)
   .max(60)
   .transform((v) => v.replace(/\s+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()));
+
+// An exact moment: ISO timestamp WITH an offset, e.g. 2026-10-05T09:00:00+05:30. Becomes a Date (UTC inside).
+export const instant = z
+  .string()
+  .datetime({ offset: true })
+  .transform((v) => new Date(v));

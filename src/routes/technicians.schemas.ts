@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { area, pagination, uuid } from '../validation/common';
+import { area, instant, pagination, uuid } from '../validation/common';
 
 export const listTechniciansQuery = pagination.extend({
   q: z.string().trim().max(100).optional(),
@@ -38,12 +38,6 @@ export const listTimeOffQuery = pagination.extend({
     .transform((v) => v === 'true')
     .optional(),
 });
-
-// Times are ISO timestamps with an offset, e.g. 2026-10-05T09:00:00+05:30 (stored as UTC).
-const instant = z
-  .string()
-  .datetime({ offset: true })
-  .transform((v) => new Date(v));
 
 export const createTimeOffBody = z
   .object({
