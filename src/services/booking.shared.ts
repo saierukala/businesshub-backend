@@ -13,6 +13,9 @@ export const FREES_SLOT = ['CANCELLED', 'NO_SHOW'] as const;
 
 export const istDate = (d: Date) => DateTime.fromJSDate(d, { zone: BUSINESS_TZ }).toFormat('yyyy-MM-dd');
 
+// "Wed 7 Oct, 10:00 am": for notes people read (history). Audit metadata keeps exact ISO instants.
+export const istLabel = (d: Date) => DateTime.fromJSDate(d, { zone: BUSINESS_TZ }).toFormat('ccc d LLL, h:mm a').replace(/AM|PM/, (m) => m.toLowerCase());
+
 // Loads a booking the actor may act on. A customer asking for someone else's booking gets 404.
 export async function findBookingFor(actor: Actor, id: string) {
   return assertOwnsRecord(actor, await prisma.booking.findUnique({ where: { id } }), 'Booking');

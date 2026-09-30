@@ -7,7 +7,7 @@ import { getSettings, loadSlots, modeFor } from './availability.service';
 import { writeAudit } from './audit.service';
 import { RESCHEDULABLE } from './booking.status';
 import { bookingInclude, bookingView } from './booking.view';
-import { checkOverrides, findBookingFor, hours, istDate, nextBookingNumber, orderByLoad, slotGone, type Actor } from './booking.shared';
+import { checkOverrides, findBookingFor, hours, istDate, istLabel, nextBookingNumber, orderByLoad, slotGone, type Actor } from './booking.shared';
 import type { CreateBookingBody, RescheduleBookingBody } from '../routes/bookings.schemas';
 
 const minutes = (n: number) => n * 60_000;
@@ -59,7 +59,7 @@ export async function createBooking(actor: Actor, input: CreateBookingBody, now 
     ? checkOverrides(
         actor,
         startAt.getTime() < now.getTime() + minutes(settings.bookingCutoffMinutes)
-          ? [{ code: 'BOOKING_CUTOFF', message: `This is inside the ${hours(settings.bookingCutoffMinutes)} booking cutoff.` }]
+          ? [{ code: 'BOOKING_CUTOFF', message: `This is inside the ${settings.bookingCutoffMinutes / 60}-hour booking cutoff.` }]
           : [],
         input.overrideReason,
       )
@@ -166,7 +166,7 @@ export async function rescheduleBooking(actor: Actor, bookingId: string, input: 
   if (!slot) throw slotGone();
 
   if (input.startAt.getTime() < now.getTime() + minutes(settings.bookingCutoffMinutes)) {
-    blocked.push({ code: 'BOOKING_CUTOFF', message: `The new time is inside the ${hours(settings.bookingCutoffMinutes)} booking cutoff.` });
+    blocked.push({ code: 'BOOKING_CUTOFF', message: `The new time is inside the ${settings.bookingCutoffMinutes / 60}-hour booking cutoff.` });
   }
   const override = checkOverrides(actor, blocked, input.overrideReason);
 
@@ -193,7 +193,7 @@ export async function rescheduleBooking(actor: Actor, bookingId: string, input: 
         });
         if (count === 0) throw new AppError(409, 'CONFLICT', 'This booking was just changed by someone else. Reload and try again.');
 
-        const note = `Rescheduled from ${current.startAt.toISOString()} to ${input.startAt.toISOString()}`;
+        const note = `Rescheduled from ${istLabel(current.startAt)} to ${istLabel(input.startAt)} (IST)`;
         await tx.bookingStatusHistory.create({
           data: { bookingId: current.id, fromStatus: current.status, toStatus: current.status, changedByUserId: actor.id, note },
         });

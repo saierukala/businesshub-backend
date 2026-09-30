@@ -62,7 +62,9 @@ describe('one technician, one slot', () => {
       w.customer.agent.post(`/bookings/${mine.id}/reschedule`).send({ startAt: at('14:00').toISOString() }),
       other.agent.post('/bookings').send(bookingBody(w, '14:00', other)),
     ]);
-    expect([move.status, book.status].sort()).toEqual([200, 409]);
+    // Either may win the slot: the reschedule (200) or the new booking (201). Never both.
+    expect([move.status, book.status].filter((s) => s === 409)).toHaveLength(1);
+    expect([move.status, book.status].filter((s) => s < 300)).toHaveLength(1);
     const overlapping = await prisma.booking.count({ where: { startAt: at('14:00') } });
     expect(overlapping).toBe(1);
   });

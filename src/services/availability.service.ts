@@ -7,7 +7,15 @@ import type { AvailabilityQuery } from '../routes/availability.schemas';
 
 export type SlotMode = 'customer' | 'staff';
 
-export const getSettings = () => prisma.businessSettings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
+// The single settings row. The seed creates it; if it is missing (fresh database) it is created with the
+// defaults. Not an upsert: simultaneous first requests would all try to insert and all but one would fail.
+// createMany + skipDuplicates is INSERT ... ON CONFLICT DO NOTHING, which is safe when requests race.
+export async function getSettings() {
+  const existing = await prisma.businessSettings.findUnique({ where: { id: 1 } });
+  if (existing) return existing;
+  await prisma.businessSettings.createMany({ data: [{ id: 1 }], skipDuplicates: true });
+  return prisma.businessSettings.findUniqueOrThrow({ where: { id: 1 } });
+}
 
 // Loads what the pure engine needs for one day and runs it. Shared by GET /availability and by
 // createBooking / rescheduleBooking, so the booking check and the slots the user saw cannot differ.

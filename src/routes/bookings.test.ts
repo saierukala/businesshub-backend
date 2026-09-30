@@ -239,8 +239,7 @@ describe('reschedule', () => {
     expect(res.body).toMatchObject({ id: b.id, rescheduleCount: 1, status: 'CONFIRMED', startAt: at('14:00').toISOString(), endAt: at('15:00').toISOString() });
 
     const history = await prisma.bookingStatusHistory.findMany({ where: { bookingId: b.id }, orderBy: { createdAt: 'asc' } });
-    expect(history[1].note).toContain(at('10:00').toISOString());
-    expect(history[1].note).toContain(at('14:00').toISOString());
+    expect(history[1].note).toMatch(/^Rescheduled from \w{3} \d+ \w{3}, 10:00 am to \w{3} \d+ \w{3}, 2:00 pm \(IST\)$/);
     expect((await audit('BOOKING_RESCHEDULED'))[0].metadata).toMatchObject({ from: at('10:00').toISOString(), to: at('14:00').toISOString(), rescheduleCount: 1 });
 
     expect((await w.customer.agent.post('/bookings').send(bookingBody(w, '10:00'))).status).toBe(201); // old slot is free
