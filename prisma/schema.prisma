@@ -79,17 +79,19 @@ enum AuthTokenType {
 // ---------- Users & customers ----------
 
 model User {
-  id              String    @id @default(uuid())
-  name            String
-  email           String?   @unique // null for phone-only customers created by staff
-  phone           String?
-  passwordHash    String? // null for customers created by staff (they can claim the account later)
-  role            Role
-  active          Boolean   @default(true)
-  emailVerifiedAt DateTime? @db.Timestamptz(3)
-  createdByUserId String?
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  id                String    @id @default(uuid())
+  name              String
+  email             String?   @unique // null for phone-only customers created by staff
+  phone             String?
+  passwordHash      String? // null for customers created by staff (they can claim the account later)
+  role              Role
+  active            Boolean   @default(true)
+  emailVerifiedAt   DateTime? @db.Timestamptz(3)
+  // JWTs issued before this moment are rejected (logs out old sessions after a password reset)
+  passwordChangedAt DateTime? @db.Timestamptz(3)
+  createdByUserId   String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
 
   technician           Technician?
   addresses            Address[]

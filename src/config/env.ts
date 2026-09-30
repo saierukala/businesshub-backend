@@ -8,6 +8,9 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  // Optional. Without it, emails are not sent: they are logged (dev) so you can copy the link.
+  SMTP_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  EMAIL_FROM: z.string().default('HomeFix <no-reply@homefix.test>'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 

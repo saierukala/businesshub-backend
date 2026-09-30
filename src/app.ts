@@ -7,6 +7,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { healthRouter } from './routes/health';
+import { authRouter } from './routes/auth';
 
 export function createApp() {
   const app = express();
@@ -19,7 +20,8 @@ export function createApp() {
   app.use(cookieParser());
 
   app.use(healthRouter);
-  // Later phases mount: /auth, /users, /services, /bookings, ...
+  app.use('/auth', authRouter);
+  // Later phases mount: /users, /services, /bookings, ...
 
   app.use(notFound);
   app.use(errorHandler);
