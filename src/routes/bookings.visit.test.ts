@@ -52,6 +52,17 @@ describe('a technician sees only their own jobs', () => {
     expect((await otherAgent.get('/bookings')).body.total).toBe(0);
   });
 
+  it('hideCancelled leaves out cancelled and no-show jobs, and the total matches', async () => {
+    const live = await assignedJob('10:00');
+    const gone = await assignedJob('13:00');
+    await prisma.booking.update({ where: { id: gone.id }, data: { status: 'NO_SHOW' } });
+    const all = await live.agent.get('/bookings');
+    expect(all.body.total).toBe(1 + (gone.tech.id === live.tech.id ? 1 : 0));
+    const open = await live.agent.get('/bookings?hideCancelled=true');
+    expect(open.body.items.map((i: { id: string }) => i.id)).toEqual([live.id]);
+    expect(open.body.total).toBe(1);
+  });
+
   it('cannot book, move, cancel, assign or no-show', async () => {
     const job = await assignedJob();
     expect((await job.agent.post('/bookings').send(bookingBody(w, '12:00'))).status).toBe(403);

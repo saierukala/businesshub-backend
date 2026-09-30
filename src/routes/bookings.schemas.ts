@@ -39,6 +39,7 @@ export const listBookingsQuery = pagination.extend({
   customerId: uuid.optional(),
   technicianId: uuid.optional(),
   needsReassignment: queryBool.optional(),
+  hideCancelled: queryBool.optional(), // leaves out CANCELLED and NO_SHOW, so counts match what a screen shows
   sort: z.enum(['newest', 'soonest']).default('newest'), // soonest = earliest visit first (the reassignment queue)
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // IST calendar days, inclusive
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

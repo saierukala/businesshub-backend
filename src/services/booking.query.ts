@@ -12,6 +12,7 @@ const dayStart = (d: string) => DateTime.fromISO(d, { zone: BUSINESS_TZ }).start
 
 export async function listBookings(actor: Actor, q: ListBookingsQuery) {
   const where: Prisma.BookingWhereInput = { status: q.status };
+  if (q.hideCancelled && !q.status) where.status = { notIn: ['CANCELLED', 'NO_SHOW'] };
   if (isStaff(actor.role)) {
     where.customerId = q.customerId;
     where.technicianId = q.technicianId;
