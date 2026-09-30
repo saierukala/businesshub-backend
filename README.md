@@ -21,9 +21,16 @@ npx prisma migrate dev
 # 4. Seed demo data
 npm run seed
 
-# 5. Run
+# 5. Run the API
 npm run dev
+
+# 6. In a second terminal, run the background worker (emails, in-app notifications, reminders)
+npm run worker
 ```
+
+Needs Node 22.12 or newer. The worker is a separate process on the same database. Without SMTP_URL it prints the emails
+it would send instead of sending them. Bookings work even if the worker is not running: the notifications wait in the
+queue (pg-boss, in the `pgboss` schema of the same database) and go out when it starts.
 
 ## Check it works
 

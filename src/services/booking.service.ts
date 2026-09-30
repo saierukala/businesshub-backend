@@ -6,6 +6,7 @@ import { isStaff } from '../middleware/auth';
 import { assertOwnsRecord, resolveCustomerId } from './customer-access.service';
 import { getSettings, loadSlots, modeFor, type SlotMode } from './availability.service';
 import { writeAudit } from './audit.service';
+import { events } from '../jobs/events';
 import { RESCHEDULABLE } from './booking.status';
 import { bookingInclude, bookingView } from './booking.view';
 import { checkOverrides, findBookingFor, hours, istDate, istLabel, nextBookingNumber, orderByLoad, slotGone, type Actor } from './booking.shared';
@@ -157,6 +158,7 @@ export async function placeBooking(p: Placement) {
         );
         return created;
       });
+      await events.bookingCreated({ id: booking.id, startAt }, now); // confirmation + reminders, queued for the worker
       return bookingView(booking);
     } catch (err) {
       if (isExclusionViolation(err)) continue; // someone got this technician first: try the next one
@@ -254,6 +256,11 @@ export async function rescheduleBooking(actor: Actor, bookingId: string, input: 
         );
         return tx.booking.findUniqueOrThrow({ where: { id: current.id }, include: bookingInclude });
       });
+      await events.rescheduled(
+        current.id,
+        { previousStartAt: current.startAt, newStartAt: input.startAt, previousTechnicianId: current.technicianId, technicianId },
+        now,
+      );
       return bookingView(booking);
     } catch (err) {
       if (isExclusionViolation(err)) continue;

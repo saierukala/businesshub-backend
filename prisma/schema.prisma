@@ -289,6 +289,7 @@ model Booking {
   visit         ServiceVisit?
   payments      Payment[]
   review        Review?
+  notifications Notification[]
 
   @@index([customerId])
   @@index([technicianId, startAt])
@@ -373,14 +374,20 @@ model Review {
 model Notification {
   id        String    @id @default(uuid())
   userId    String
-  type      String
+  type      String // BOOKING_CONFIRMED, TECHNICIAN_ASSIGNED, REMINDER_24H, ... (see notification.build.ts)
   message   String
+  bookingId String? // where the notification points to
+  // One notification per (type, booking, person, detail): a retried job finds the row instead of adding a copy.
+  dedupeKey String?   @unique
+  emailedAt DateTime? @db.Timestamptz(3) // set once the email went out; null = not sent (or the person has no email)
   readAt    DateTime? @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 model AuthToken {

@@ -4,6 +4,7 @@ import { isExclusionViolation } from '../db/pgErrors';
 import { AppError } from '../errors/AppError';
 import { isStaff } from '../middleware/auth';
 import { writeAudit } from './audit.service';
+import { events } from '../jobs/events';
 import { loadSlots } from './availability.service';
 import { changeStatus } from './booking.status';
 import { bookingInclude, bookingView } from './booking.view';
@@ -94,6 +95,7 @@ export async function assignTechnician(actor: Actor, bookingId: string, input: A
       }
       return tx.booking.findUniqueOrThrow({ where: { id: booking.id }, include: bookingInclude });
     });
+    await events.technicianAssigned(booking.id, previous, input.technicianId);
     return bookingView(updated);
   } catch (err) {
     if (isExclusionViolation(err)) throw slotGone(); // someone booked that technician a moment ago

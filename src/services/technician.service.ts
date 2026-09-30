@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma';
 import { pageArgs, toPage } from '../db/paginate';
 import { AppError } from '../errors/AppError';
 import { writeAudit } from './audit.service';
+import { events } from '../jobs/events';
 import type { CreateTimeOffBody, ListTechniciansQuery, ListTimeOffQuery, SetWorkingHoursBody } from '../routes/technicians.schemas';
 
 const include = {
@@ -100,14 +101,14 @@ export async function listTimeOff(id: string, q: ListTimeOffQuery) {
 }
 
 export async function createTimeOff(actorId: string, id: string, input: CreateTimeOffBody) {
-  await load(id);
+  const technician = await load(id);
   const overlap = await prisma.timeOff.findFirst({
     where: { technicianId: id, startAt: { lt: input.endAt }, endAt: { gt: input.startAt } },
     select: { id: true },
   });
   if (overlap) throw AppError.conflict('This overlaps time off that is already recorded', 'TIME_OFF_OVERLAP');
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const row = await tx.timeOff.create({ data: { ...input, technicianId: id, createdByUserId: actorId } });
 
     // Bookings already inside the time off are never deleted or moved. They are flagged, and the
@@ -152,6 +153,9 @@ export async function createTimeOff(actorId: string, id: string, input: CreateTi
     );
     return { ...row, bookingsNeedingReassignment: flagged.count };
   });
+  // The managers are told (in the app and by email) that bookings need a new technician.
+  await events.flaggedForReassignment({ timeOffId: result.id, technicianName: technician.user.name, count: result.bookingsNeedingReassignment });
+  return result;
 }
 
 export async function deleteTimeOff(actorId: string, id: string, timeOffId: string) {

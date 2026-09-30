@@ -1,9 +1,11 @@
 import bcrypt from 'bcryptjs';
 import type { Role } from '@prisma/client';
 import { prisma } from '../db/prisma';
+import { testQueue } from '../jobs/queue';
 
 // Empties every table (except Prisma's migration history) so each test starts clean.
 export async function resetDb() {
+  testQueue.clear(); // jobs queued by an earlier test must not leak into this one
   const rows = await prisma.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;

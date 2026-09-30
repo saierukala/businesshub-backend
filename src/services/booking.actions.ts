@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma';
+import { events } from '../jobs/events';
 import { AppError } from '../errors/AppError';
 import { isStaff } from '../middleware/auth';
 import { getSettings } from './availability.service';
@@ -34,6 +35,7 @@ export async function cancelBooking(actor: Actor, bookingId: string, input: Canc
     });
     return tx.booking.findUniqueOrThrow({ where: { id: booking.id }, include: bookingInclude });
   });
+  await events.cancelled(booking.id);
   return bookingView(updated);
 }
 

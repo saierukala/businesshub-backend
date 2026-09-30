@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma';
 import { AppError } from '../errors/AppError';
 import { isStaff } from '../middleware/auth';
 import { writeAudit } from './audit.service';
+import { events } from '../jobs/events';
 import { changeStatus } from './booking.status';
 import { bookingInclude, bookingView } from './booking.view';
 import { findBookingFor, findMyBooking, type Actor } from './booking.shared';
@@ -46,6 +47,7 @@ export async function advanceBooking(actor: Actor, bookingId: string, input: Adv
       });
     }
   });
+  if (input.to === 'EN_ROUTE') await events.enRoute(bookingId);
   return reload(bookingId);
 }
 
@@ -72,6 +74,7 @@ export async function completeVisit(actor: Actor, bookingId: string, input: Comp
       auditAction: 'VISIT_COMPLETED',
     });
   });
+  await events.visitCompleted(bookingId, now);
   return reload(bookingId);
 }
 
@@ -101,6 +104,7 @@ export async function proposeExtraCharge(actor: Actor, bookingId: string, input:
       tx,
     );
   });
+  await events.extraChargeRequested(bookingId, new Date());
   return reload(bookingId);
 }
 
@@ -136,5 +140,6 @@ export async function decideExtraCharge(actor: Actor, bookingId: string, input: 
     return updated;
   });
   if (count === 0) throw new AppError(409, 'NO_EXTRA_CHARGE_PENDING', 'Someone else already decided on this extra charge');
+  await events.extraChargeDecided(bookingId, input.decision, now);
   return reload(bookingId);
 }

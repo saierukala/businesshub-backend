@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "worker": "tsx src/worker.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx prisma/seed.ts",
@@ -25,6 +27,7 @@
     "jsonwebtoken": "^9.0.3",
     "luxon": "^3.7.2",
     "nodemailer": "^10.0.13",
+    "pg-boss": "^12.35.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "zod": "^3.25.76"
@@ -47,5 +50,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

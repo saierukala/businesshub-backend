@@ -14,6 +14,7 @@ import { addressesRouter } from './routes/addresses';
 import { appliancesRouter } from './routes/appliances';
 import { usersRouter } from './routes/users';
 import { techniciansRouter } from './routes/technicians';
+import { notificationsRouter } from './routes/notifications';
 import { availabilityRouter } from './routes/availability';
 import { bookingsRouter } from './routes/bookings';
 
@@ -38,6 +39,7 @@ export function createApp() {
   app.use('/technicians', techniciansRouter);
   app.use('/availability', availabilityRouter);
   app.use('/bookings', bookingsRouter);
+  app.use('/notifications', notificationsRouter);
   // Later phases mount: /visits, /payments, ...
 
   app.use(notFound);
