@@ -131,10 +131,12 @@ describe('GET /availability', () => {
     expect((await agent.get(query())).status).toBe(404);
   });
 
-  it('is closed to anonymous users and technicians', async () => {
+  it('is closed to anonymous users; technicians get times only (for follow-up visits)', async () => {
     expect((await request(app).get(query())).status).toBe(401);
     const { agent } = await actor('TECHNICIAN');
-    expect((await agent.get(query())).status).toBe(403);
+    const res = await agent.get(query());
+    expect(res.status).toBe(200);
+    expect(res.body.slots[0].technicians).toBeUndefined(); // customer mode, never who is free
   });
 });
 

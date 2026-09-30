@@ -1,9 +1,10 @@
+import type { Address, Appliance, BookingSource, Service } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import { isExclusionViolation } from '../db/pgErrors';
 import { AppError } from '../errors/AppError';
 import { isStaff } from '../middleware/auth';
 import { assertOwnsRecord, resolveCustomerId } from './customer-access.service';
-import { getSettings, loadSlots, modeFor } from './availability.service';
+import { getSettings, loadSlots, modeFor, type SlotMode } from './availability.service';
 import { writeAudit } from './audit.service';
 import { RESCHEDULABLE } from './booking.status';
 import { bookingInclude, bookingView } from './booking.view';
@@ -14,12 +15,6 @@ const minutes = (n: number) => n * 60_000;
 
 // The ONE way to create a booking. Customers and staff both come through here (spec rule 3):
 // the controller passes the acting user, and the customer is worked out from their role.
-//
-// Layers against double booking (spec §8):
-//  1. availability check, so the user gets a clear message;
-//  2. the database EXCLUDE constraint, which is the real guarantee: it rejects an overlapping
-//     booking even when two requests pass step 1 at the same instant.
-// If the DB rejects our pick, we try the next free technician; only when none is left do we return 409.
 export async function createBooking(actor: Actor, input: CreateBookingBody, now = new Date()) {
   const staff = isStaff(actor.role);
   if (!staff && (input.technicianId || input.overrideReason || input.source)) {
@@ -46,10 +41,51 @@ export async function createBooking(actor: Actor, input: CreateBookingBody, now 
     throw AppError.badRequest('This service is not for that appliance type', [{ path: 'serviceId', message: 'Pick a service for this appliance' }]);
   }
 
+  return placeBooking({
+    actor,
+    mode: modeFor(actor.role),
+    customerId,
+    appliance: appliance!,
+    service,
+    address: address!,
+    problem: input.problemDescription,
+    startAt: input.startAt,
+    source: staff ? input.source! : 'ONLINE',
+    technicianId: input.technicianId,
+    overrideReason: input.overrideReason,
+    now,
+  });
+}
+
+type Placement = {
+  actor: Actor;
+  mode: SlotMode;
+  customerId: string;
+  appliance: Appliance;
+  service: Service;
+  address: Address;
+  problem: string;
+  startAt: Date;
+  source: BookingSource;
+  technicianId?: string; // staff pick: an assignment (ASSIGNED). Omit to auto-pick a free one (CONFIRMED).
+  overrideReason?: string; // staff: needed inside the booking cutoff
+  followUpOfBookingId?: string;
+  now: Date;
+};
+
+// The shared middle of every new booking (customer, staff, follow-up).
+//
+// Layers against double booking (spec §8):
+//  1. the availability engine finds the slot, so the user gets a clear message;
+//  2. the database EXCLUDE constraint is the real guarantee: it rejects an overlapping booking even
+//     when two requests pass step 1 at the same instant.
+// If the DB rejects our pick, we try the next free technician; only when none is left do we return 409.
+export async function placeBooking(p: Placement) {
+  const { actor, service, address, appliance, startAt, now } = p;
+  const staff = isStaff(actor.role);
   const settings = await getSettings();
-  const startAt = input.startAt;
   const date = istDate(startAt);
-  const { slots } = await loadSlots({ service, area: address!.area, date, mode: modeFor(actor.role), now });
+  const { slots } = await loadSlots({ service, area: address.area, date, mode: p.mode, now });
   const slot = slots.find((s) => s.startAt.getTime() === startAt.getTime());
   if (!slot) throw slotGone();
 
@@ -61,22 +97,22 @@ export async function createBooking(actor: Actor, input: CreateBookingBody, now 
         startAt.getTime() < now.getTime() + minutes(settings.bookingCutoffMinutes)
           ? [{ code: 'BOOKING_CUTOFF', message: `This is inside the ${settings.bookingCutoffMinutes / 60}-hour booking cutoff.` }]
           : [],
-        input.overrideReason,
+        p.overrideReason,
       )
     : undefined;
 
   let candidates: string[];
-  if (input.technicianId) {
-    if (!slot.technicianIds.includes(input.technicianId)) throw slotGone(); // not free / not qualified for this slot
-    candidates = [input.technicianId];
+  if (p.technicianId) {
+    if (!slot.technicianIds.includes(p.technicianId)) throw slotGone(); // not free / not qualified for this slot
+    candidates = [p.technicianId];
   } else {
     candidates = await orderByLoad(slot.technicianIds, date);
   }
 
   const endAt = slot.endAt;
-  const source = staff ? input.source! : 'ONLINE';
   // A technician the manager picked is an assignment; an auto-picked one waits for the manager (spec §5).
-  const status = input.technicianId ? 'ASSIGNED' : 'CONFIRMED';
+  const status = p.technicianId ? 'ASSIGNED' : 'CONFIRMED';
+  const note = p.followUpOfBookingId ? 'Follow-up visit' : staff ? `Booked by staff (${p.source})` : 'Booked online';
 
   for (const technicianId of candidates) {
     try {
@@ -84,36 +120,38 @@ export async function createBooking(actor: Actor, input: CreateBookingBody, now 
         const created = await tx.booking.create({
           data: {
             bookingNumber: await nextBookingNumber(tx, now),
-            customerId,
-            applianceId: appliance!.id,
+            customerId: p.customerId,
+            applianceId: appliance.id,
             serviceId: service.id,
-            addressId: address!.id,
+            addressId: address.id,
             technicianId,
-            problemDescription: input.problemDescription,
+            problemDescription: p.problem,
             startAt,
             endAt,
             status,
-            source,
+            source: p.source,
             createdByUserId: actor.id,
+            followUpOfBookingId: p.followUpOfBookingId,
           },
           include: bookingInclude,
         });
         await tx.bookingStatusHistory.create({
-          data: {
-            bookingId: created.id,
-            fromStatus: null,
-            toStatus: status,
-            changedByUserId: actor.id,
-            note: staff ? `Booked by staff (${source})` : 'Booked online',
-          },
+          data: { bookingId: created.id, fromStatus: null, toStatus: status, changedByUserId: actor.id, note },
         });
         await writeAudit(
           {
             userId: actor.id,
-            action: 'BOOKING_CREATED',
+            action: p.followUpOfBookingId ? 'BOOKING_FOLLOW_UP_CREATED' : 'BOOKING_CREATED',
             entityType: 'Booking',
             entityId: created.id,
-            metadata: { source, customerId, technicianId, startAt: startAt.toISOString(), ...override },
+            metadata: {
+              source: p.source,
+              customerId: p.customerId,
+              technicianId,
+              startAt: startAt.toISOString(),
+              followUpOfBookingId: p.followUpOfBookingId ?? null,
+              ...override,
+            },
           },
           tx,
         );

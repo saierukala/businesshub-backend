@@ -42,6 +42,13 @@ export const area = z
   .max(60)
   .transform((v) => v.replace(/\s+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()));
 
+// Money in rupees with at most 2 decimals (sent as a number, e.g. 499 or 499.5).
+export const money = z
+  .number()
+  .max(1_000_000)
+  // v * 100 must be a whole number of paise (tolerance for float noise like 0.1 + 0.2)
+  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'At most 2 decimals');
+
 // An exact moment: ISO timestamp WITH an offset, e.g. 2026-10-05T09:00:00+05:30. Becomes a Date (UTC inside).
 export const instant = z
   .string()

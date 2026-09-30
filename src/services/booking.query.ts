@@ -5,7 +5,7 @@ import { pageArgs, toPage } from '../db/paginate';
 import { isStaff } from '../middleware/auth';
 import { BUSINESS_TZ } from './availability.compute';
 import { bookingDetailView, bookingInclude, bookingView, historyInclude } from './booking.view';
-import { findBookingFor, type Actor } from './booking.shared';
+import { findBookingForView, technicianIdOf, type Actor } from './booking.shared';
 import type { ListBookingsQuery } from '../routes/bookings.schemas';
 
 const dayStart = (d: string) => DateTime.fromISO(d, { zone: BUSINESS_TZ }).startOf('day').toJSDate();
@@ -16,6 +16,8 @@ export async function listBookings(actor: Actor, q: ListBookingsQuery) {
     where.customerId = q.customerId;
     where.technicianId = q.technicianId;
     where.needsReassignment = q.needsReassignment;
+  } else if (actor.role === 'TECHNICIAN') {
+    where.technicianId = await technicianIdOf(actor); // a technician only ever sees their own jobs
   } else {
     where.customerId = actor.id; // customers only ever see their own, whatever they ask for
   }
@@ -34,7 +36,10 @@ export async function listBookings(actor: Actor, q: ListBookingsQuery) {
 }
 
 export async function getBooking(actor: Actor, id: string) {
-  await findBookingFor(actor, id); // 404 for a customer's neighbour, 403 for a technician
-  const booking = await prisma.booking.findUniqueOrThrow({ where: { id }, include: { ...bookingInclude, ...historyInclude } });
-  return bookingDetailView(booking, actor.role);
+  await findBookingForView(actor, id); // 404 for a customer's neighbour or another technician's job
+  const [booking, visit] = await Promise.all([
+    prisma.booking.findUniqueOrThrow({ where: { id }, include: { ...bookingInclude, ...historyInclude } }),
+    prisma.serviceVisit.findUnique({ where: { bookingId: id } }),
+  ]);
+  return bookingDetailView(booking, actor.role, visit);
 }

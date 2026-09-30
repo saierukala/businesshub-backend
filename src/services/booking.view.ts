@@ -1,4 +1,4 @@
-import type { Prisma, Role } from '@prisma/client';
+import type { Prisma, Role, ServiceVisit } from '@prisma/client';
 
 // What we load for a booking, and how it is shown. Customers get the same fields as staff,
 // minus who changed a status.
@@ -11,6 +11,7 @@ export const bookingInclude = {
 } satisfies Prisma.BookingInclude;
 
 export const historyInclude = {
+  followUpOf: { select: { id: true, bookingNumber: true } },
   statusHistory: {
     orderBy: { createdAt: 'asc' },
     include: { changedBy: { select: { name: true, role: true } } },
@@ -41,10 +42,37 @@ export function bookingView(b: Loaded) {
   };
 }
 
-export function bookingDetailView(b: WithHistory, viewerRole: Role) {
+const money = (d: Prisma.Decimal | null) => (d === null ? null : d.toFixed(2));
+
+// What happened at the visit. finalAmount = the service's base price + the extra charge IF it was approved
+// (spec §10). It is only ever computed here, on the server.
+export function visitView(v: ServiceVisit | null, basePrice: Prisma.Decimal) {
+  if (!v) return null;
+  const extra = v.extraChargeStatus === 'APPROVED' && v.extraChargeAmount ? v.extraChargeAmount : null;
+  return {
+    startedAt: v.startedAt,
+    completedAt: v.completedAt,
+    diagnosis: v.diagnosis,
+    workPerformed: v.workPerformed,
+    partsNote: v.partsNote,
+    notes: v.notes,
+    result: v.result,
+    extraCharge: {
+      status: v.extraChargeStatus,
+      amount: money(v.extraChargeAmount),
+      reason: v.extraChargeReason,
+      decidedAt: v.extraChargeDecidedAt,
+    },
+    finalAmount: basePrice.add(extra ?? 0).toFixed(2),
+  };
+}
+
+export function bookingDetailView(b: WithHistory, viewerRole: Role, visit: ServiceVisit | null = null) {
   const staff = viewerRole === 'OWNER' || viewerRole === 'MANAGER';
   return {
     ...bookingView(b),
+    followUpOf: b.followUpOf ? { id: b.followUpOf.id, bookingNumber: b.followUpOf.bookingNumber } : null,
+    visit: visitView(visit, b.service.basePrice),
     history: b.statusHistory.map((h) => ({
       fromStatus: h.fromStatus,
       toStatus: h.toStatus,

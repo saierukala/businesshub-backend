@@ -21,6 +21,32 @@ export async function findBookingFor(actor: Actor, id: string) {
   return assertOwnsRecord(actor, await prisma.booking.findUnique({ where: { id } }), 'Booking');
 }
 
+// The Technician record of a logged-in technician user (their id is what bookings point to).
+export async function technicianIdOf(actor: Actor): Promise<string> {
+  if (actor.role !== 'TECHNICIAN') throw AppError.forbidden();
+  const tech = await prisma.technician.findUnique({ where: { userId: actor.id }, select: { id: true } });
+  if (!tech) throw AppError.forbidden('No technician profile for this account');
+  return tech.id;
+}
+
+// For READING a booking: like findBookingFor, but a technician may also see the bookings assigned to
+// them (and only those: anyone else's is 404). Changes never use this: technicians have their own
+// visit actions.
+export async function findBookingForView(actor: Actor, id: string) {
+  if (actor.role !== 'TECHNICIAN') return findBookingFor(actor, id);
+  const [booking, techId] = await Promise.all([prisma.booking.findUnique({ where: { id } }), technicianIdOf(actor)]);
+  if (!booking || booking.technicianId !== techId) throw AppError.notFound('Booking not found');
+  return booking;
+}
+
+// The booking assigned to this technician, for their visit actions. 404 if it is not theirs.
+export async function findMyBooking(actor: Actor, id: string) {
+  const techId = await technicianIdOf(actor);
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking || booking.technicianId !== techId) throw AppError.notFound('Booking not found');
+  return { booking, techId };
+}
+
 type Blocked = { code: string; message: string };
 
 // Staff may override cutoff and cancellation windows only, and only with a reason that goes into the
