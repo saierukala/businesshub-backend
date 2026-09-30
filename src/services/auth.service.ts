@@ -125,13 +125,21 @@ export async function inviteCustomer(customerId: string) {
   if (!user.active) throw AppError.conflict('Customer account is deactivated', 'ACCOUNT_DISABLED');
   if (!user.email) throw AppError.badRequest('Add an email address to this customer first');
   if (user.passwordHash) throw AppError.conflict('Customer already has an online account', 'ALREADY_REGISTERED');
+  await sendAccountInvite(user);
+}
 
+// Invite link for an account created by staff (customer) or by the owner (manager/technician).
+// The person sets their own password, so staff never know it.
+export async function sendAccountInvite(user: User) {
+  if (!user.email) return;
   const token = await createToken(user.id, 'ACCOUNT_INVITE');
+  const why =
+    user.role === 'CUSTOMER'
+      ? 'HomeFix has created an account for your bookings. Set a password to view your bookings online'
+      : 'You have been added to the HomeFix team. Set a password to sign in';
   await mailer.send({
     to: user.email,
     subject: 'Your HomeFix account is ready',
-    text:
-      `Hi ${user.name}, HomeFix has created an account for your bookings. ` +
-      `Set a password to view your bookings online (link valid for 7 days): ${link('/accept-invite', token)}`,
+    text: `Hi ${user.name}, ${why} (link valid for 7 days): ${link('/accept-invite', token)}`,
   });
 }

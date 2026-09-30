@@ -1,15 +1,12 @@
 import { z } from 'zod';
+import { email, name, phone } from '../validation/common';
 
-// Emails are trimmed and lower-cased so "Ravi@X.com" and "ravi@x.com" are one account.
-const email = z.string().trim().toLowerCase().email().max(254);
 // bcrypt only uses the first 72 bytes, so cap the length.
 const password = z.string().min(8, 'Password must be at least 8 characters').max(72);
-// Indian mobile number: 10 digits starting 6-9.
-const phone = z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a 10-digit mobile number');
 const token = z.string().min(20).max(200);
 
 export const registerBody = z.object({
-  name: z.string().trim().min(2).max(100),
+  name,
   email,
   phone: phone.optional(),
   password,

@@ -8,6 +8,11 @@ import { logger } from './config/logger';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
+import { categoriesRouter, servicesRouter } from './routes/catalog';
+import { customersRouter } from './routes/customers';
+import { addressesRouter } from './routes/addresses';
+import { appliancesRouter } from './routes/appliances';
+import { usersRouter } from './routes/users';
 
 export function createApp() {
   const app = express();
@@ -21,7 +26,13 @@ export function createApp() {
 
   app.use(healthRouter);
   app.use('/auth', authRouter);
-  // Later phases mount: /users, /services, /bookings, ...
+  app.use('/service-categories', categoriesRouter);
+  app.use('/services', servicesRouter);
+  app.use('/customers', customersRouter);
+  app.use('/addresses', addressesRouter);
+  app.use('/appliances', appliancesRouter);
+  app.use('/users', usersRouter);
+  // Later phases mount: /technicians, /bookings, ...
 
   app.use(notFound);
   app.use(errorHandler);

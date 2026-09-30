@@ -35,6 +35,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       status = 409;
       code = 'CONFLICT';
       message = 'A record with these details already exists';
+    } else if (err.code === 'P2003') {
+      // Foreign key: e.g. deleting an address that a booking still uses.
+      status = 409;
+      code = 'IN_USE';
+      message = 'This record is used elsewhere and cannot be removed';
     } else if (err.code === 'P2025') {
       status = 404;
       code = 'NOT_FOUND';

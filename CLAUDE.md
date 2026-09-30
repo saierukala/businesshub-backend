@@ -8,8 +8,8 @@ Do NOT open `docs/BusinessHub-Spec.md` (the full combined copy, for humans).
 Parts: 00-core, 01-data-model, 02-booking-rules, 03-availability-and-conflicts, 04-booking-flows, 05-visits-payments, 06-notifications, 07-dashboards-reports, 08-api-audit, 09-demo-and-release.
 
 ## Current phase
-Phase: 3 (Catalog, customers and users)   <!-- update this line when a phase is finished -->
-Done so far: Phase 1 (Foundation), Phase 2 (Auth and roles, backend)
+Phase: 4 (Technicians)   <!-- update this line when a phase is finished -->
+Done so far: Phase 1 (Foundation), Phase 2 (Auth and roles), Phase 3 (Catalog, customers and users)
 
 ## Stack (fixed, ask before changing)
 - Frontend: Next.js (App Router), TypeScript, Tailwind, TanStack Query, React Hook Form, Zod
