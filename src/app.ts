@@ -14,6 +14,7 @@ import { addressesRouter } from './routes/addresses';
 import { appliancesRouter } from './routes/appliances';
 import { usersRouter } from './routes/users';
 import { techniciansRouter } from './routes/technicians';
+import { availabilityRouter } from './routes/availability';
 
 export function createApp() {
   const app = express();
@@ -34,6 +35,7 @@ export function createApp() {
   app.use('/appliances', appliancesRouter);
   app.use('/users', usersRouter);
   app.use('/technicians', techniciansRouter);
+  app.use('/availability', availabilityRouter);
   // Later phases mount: /bookings, ...
 
   app.use(notFound);

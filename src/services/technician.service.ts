@@ -109,17 +109,37 @@ export async function createTimeOff(actorId: string, id: string, input: CreateTi
 
   return prisma.$transaction(async (tx) => {
     const row = await tx.timeOff.create({ data: { ...input, technicianId: id, createdByUserId: actorId } });
+
+    // Bookings already inside the time off are never deleted or moved. They are flagged, and the
+    // manager reassigns or reschedules them (spec §7). Finished or cancelled ones are left alone.
+    const flagged = await tx.booking.updateMany({
+      where: {
+        technicianId: id,
+        status: { notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] },
+        startAt: { lt: row.endAt },
+        endAt: { gt: row.startAt },
+        needsReassignment: false,
+      },
+      data: { needsReassignment: true },
+    });
+
     await writeAudit(
       {
         userId: actorId,
         action: 'TIME_OFF_ADDED',
         entityType: 'Technician',
         entityId: id,
-        metadata: { timeOffId: row.id, startAt: row.startAt.toISOString(), endAt: row.endAt.toISOString(), reason: row.reason },
+        metadata: {
+          timeOffId: row.id,
+          startAt: row.startAt.toISOString(),
+          endAt: row.endAt.toISOString(),
+          reason: row.reason,
+          bookingsFlagged: flagged.count,
+        },
       },
       tx,
     );
-    return row;
+    return { ...row, bookingsNeedingReassignment: flagged.count };
   });
 }
 
