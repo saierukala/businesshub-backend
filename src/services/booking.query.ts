@@ -38,9 +38,10 @@ export async function listBookings(actor: Actor, q: ListBookingsQuery) {
 
 export async function getBooking(actor: Actor, id: string) {
   await findBookingForView(actor, id); // 404 for a customer's neighbour or another technician's job
-  const [booking, visit] = await Promise.all([
+  const [booking, visit, payment] = await Promise.all([
     prisma.booking.findUniqueOrThrow({ where: { id }, include: { ...bookingInclude, ...historyInclude } }),
     prisma.serviceVisit.findUnique({ where: { bookingId: id } }),
+    prisma.payment.findFirst({ where: { bookingId: id, status: 'PAID' }, include: { recordedBy: { select: { name: true } } } }),
   ]);
-  return bookingDetailView(booking, actor.role, visit);
+  return bookingDetailView(booking, actor.role, visit, payment);
 }

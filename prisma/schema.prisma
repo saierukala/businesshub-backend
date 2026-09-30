@@ -343,7 +343,8 @@ model Payment {
   amount           Decimal       @db.Decimal(10, 2)
   method           PaymentMethod
   status           PaymentStatus @default(PENDING)
-  providerRef      String?
+  providerRef      String? // UPI transaction reference (or the provider's id, later)
+  receiptNumber    String?       @unique // RC-YYYY-00001, set when the payment is recorded as PAID
   recordedByUserId String?
   paidAt           DateTime?     @db.Timestamptz(3)
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)

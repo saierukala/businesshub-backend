@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as c from '../controllers/booking.controller';
 import * as s from './bookings.schemas';
 import * as v from './visits.schemas';
+import * as p from './payments.schemas';
 import { validate } from '../middleware/validate';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { idParams } from '../validation/common';
@@ -44,3 +45,7 @@ bookingsRouter.post(
 
 // A second visit for the same repair: manager or the assigned technician.
 bookingsRouter.post('/:id/follow-up', requireRole('OWNER', 'MANAGER', 'TECHNICIAN'), validate({ params: idParams, body: v.followUpBody }), c.followUp);
+
+// Payment (Phase 9): the technician of a completed job or a manager records it; everyone involved can open the receipt.
+bookingsRouter.post('/:id/payment', requireRole('OWNER', 'MANAGER', 'TECHNICIAN'), validate({ params: idParams, body: p.recordPaymentBody }), c.recordPayment);
+bookingsRouter.get('/:id/receipt', requireRole('CUSTOMER', 'OWNER', 'MANAGER', 'TECHNICIAN'), validate({ params: idParams }), c.receipt);
