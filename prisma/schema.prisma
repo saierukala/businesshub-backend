@@ -1,0 +1,424 @@
+// BusinessHub database schema (PostgreSQL). Spec: docs/spec/01-data-model.md
+// All timestamps are timestamptz (UTC). Business time rules run server-side in Asia/Kolkata.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  OWNER
+  MANAGER
+  TECHNICIAN
+  CUSTOMER
+}
+
+enum TechnicianStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ASSIGNED
+  EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum BookingSource {
+  ONLINE
+  PHONE
+  WHATSAPP
+  WALK_IN
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ExtraChargeStatus {
+  NONE
+  PROPOSED
+  APPROVED
+  DECLINED
+}
+
+enum TimeOffReason {
+  SICK
+  LEAVE
+  OTHER
+}
+
+enum AuthTokenType {
+  PASSWORD_RESET
+  EMAIL_VERIFY
+  ACCOUNT_INVITE
+}
+
+// ---------- Users & customers ----------
+
+model User {
+  id              String    @id @default(uuid())
+  name            String
+  email           String?   @unique // null for phone-only customers created by staff
+  phone           String?
+  passwordHash    String? // null for customers created by staff (they can claim the account later)
+  role            Role
+  active          Boolean   @default(true)
+  emailVerifiedAt DateTime? @db.Timestamptz(3)
+  createdByUserId String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  technician           Technician?
+  addresses            Address[]
+  appliances           Appliance[]
+  bookings             Booking[]              @relation("BookingCustomer")
+  bookingsCreated      Booking[]              @relation("BookingCreatedBy")
+  statusChanges        BookingStatusHistory[]
+  reviews              Review[]
+  notifications        Notification[]
+  authTokens           AuthToken[]
+  auditLogs            AuditLog[]
+  createdBy            User?                  @relation("UserCreatedBy", fields: [createdByUserId], references: [id])
+  usersCreated         User[]                 @relation("UserCreatedBy")
+  timeOffCreated       TimeOff[]
+  paymentsRecorded     Payment[]
+  extraChargeDecisions ServiceVisit[]
+
+  @@index([phone])
+  @@index([role])
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  customerId String
+  label      String   @default("Home")
+  line1      String
+  area       String // e.g. Kondapur. Matched against technician service areas.
+  city       String   @default("Hyderabad")
+  pincode    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  customer User      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([customerId])
+  @@index([area])
+}
+
+// ---------- Catalog ----------
+
+model ServiceCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  services   Service[]
+  appliances Appliance[]
+  skills     TechnicianSkill[]
+}
+
+model Service {
+  id              String   @id @default(uuid())
+  categoryId      String
+  name            String   @unique
+  description     String?
+  durationMinutes Int
+  basePrice       Decimal  @db.Decimal(10, 2)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  category ServiceCategory @relation(fields: [categoryId], references: [id])
+  bookings Booking[]
+
+  @@index([categoryId])
+}
+
+model Appliance {
+  id           String   @id @default(uuid())
+  customerId   String
+  categoryId   String
+  brand        String
+  model        String?
+  serialNumber String?
+  purchaseYear Int?
+  description  String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  customer User            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  category ServiceCategory @relation(fields: [categoryId], references: [id])
+  bookings Booking[]
+
+  @@index([customerId])
+  @@index([serialNumber])
+}
+
+// ---------- Technicians ----------
+
+model Technician {
+  id        String           @id @default(uuid())
+  userId    String           @unique
+  phone     String
+  status    TechnicianStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+
+  user         User                    @relation(fields: [userId], references: [id])
+  skills       TechnicianSkill[]
+  areas        TechnicianServiceArea[]
+  workingHours WorkingHours[]
+  timeOff      TimeOff[]
+  bookings     Booking[]
+  visits       ServiceVisit[]
+}
+
+model TechnicianSkill {
+  technicianId String
+  categoryId   String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  technician Technician      @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  category   ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  @@id([technicianId, categoryId])
+}
+
+model TechnicianServiceArea {
+  technicianId String
+  area         String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@id([technicianId, area])
+}
+
+model WorkingHours {
+  id           String   @id @default(uuid())
+  technicianId String
+  dayOfWeek    Int // 0 = Sunday ... 6 = Saturday
+  startTime    String // "HH:mm" in business timezone
+  endTime      String // "HH:mm" in business timezone
+  isOff        Boolean  @default(false)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@unique([technicianId, dayOfWeek])
+}
+
+model TimeOff {
+  id              String        @id @default(uuid())
+  technicianId    String
+  startAt         DateTime      @db.Timestamptz(3)
+  endAt           DateTime      @db.Timestamptz(3)
+  reason          TimeOffReason @default(OTHER)
+  note            String?
+  createdByUserId String
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+
+  technician Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation(fields: [createdByUserId], references: [id])
+
+  @@index([technicianId, startAt])
+}
+
+// ---------- Bookings ----------
+// The no-overlap EXCLUDE constraint is added by raw SQL (prisma/sql/booking_no_overlap.sql).
+
+model Booking {
+  id                  String        @id @default(uuid())
+  bookingNumber       String        @unique // BH-YYYY-00001
+  customerId          String
+  applianceId         String
+  serviceId           String
+  addressId           String
+  technicianId        String?
+  problemDescription  String
+  startAt             DateTime      @db.Timestamptz(3)
+  endAt               DateTime      @db.Timestamptz(3)
+  status              BookingStatus @default(PENDING)
+  source              BookingSource @default(ONLINE)
+  createdByUserId     String
+  followUpOfBookingId String?
+  rescheduleCount     Int           @default(0)
+  needsReassignment   Boolean       @default(false)
+  createdAt           DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(3)
+
+  customer      User                   @relation("BookingCustomer", fields: [customerId], references: [id])
+  createdBy     User                   @relation("BookingCreatedBy", fields: [createdByUserId], references: [id])
+  appliance     Appliance              @relation(fields: [applianceId], references: [id])
+  service       Service                @relation(fields: [serviceId], references: [id])
+  address       Address                @relation(fields: [addressId], references: [id])
+  technician    Technician?            @relation(fields: [technicianId], references: [id])
+  followUpOf    Booking?               @relation("FollowUp", fields: [followUpOfBookingId], references: [id])
+  followUps     Booking[]              @relation("FollowUp")
+  statusHistory BookingStatusHistory[]
+  visit         ServiceVisit?
+  payments      Payment[]
+  review        Review?
+
+  @@index([customerId])
+  @@index([technicianId, startAt])
+  @@index([status])
+  @@index([startAt])
+}
+
+model BookingStatusHistory {
+  id              String         @id @default(uuid())
+  bookingId       String
+  fromStatus      BookingStatus?
+  toStatus        BookingStatus
+  changedByUserId String
+  note            String?
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  changedBy User    @relation(fields: [changedByUserId], references: [id])
+
+  @@index([bookingId])
+}
+
+// ---------- Service visit, payment, review ----------
+
+model ServiceVisit {
+  id                         String            @id @default(uuid())
+  bookingId                  String            @unique
+  technicianId               String
+  diagnosis                  String?
+  workPerformed              String?
+  partsNote                  String?
+  notes                      String?
+  result                     String?
+  extraChargeAmount          Decimal?          @db.Decimal(10, 2)
+  extraChargeReason          String?
+  extraChargeStatus          ExtraChargeStatus @default(NONE)
+  extraChargeDecidedByUserId String?
+  extraChargeDecidedAt       DateTime?         @db.Timestamptz(3)
+  startedAt                  DateTime?         @db.Timestamptz(3)
+  completedAt                DateTime?         @db.Timestamptz(3)
+  createdAt                  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime          @updatedAt @db.Timestamptz(3)
+
+  booking              Booking    @relation(fields: [bookingId], references: [id])
+  technician           Technician @relation(fields: [technicianId], references: [id])
+  extraChargeDecidedBy User?      @relation(fields: [extraChargeDecidedByUserId], references: [id])
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  bookingId        String
+  amount           Decimal       @db.Decimal(10, 2)
+  method           PaymentMethod
+  status           PaymentStatus @default(PENDING)
+  providerRef      String?
+  recordedByUserId String?
+  paidAt           DateTime?     @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+
+  booking    Booking @relation(fields: [bookingId], references: [id])
+  recordedBy User?   @relation(fields: [recordedByUserId], references: [id])
+
+  @@index([bookingId])
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique
+  customerId String
+  rating     Int // 1..5, validated in the API
+  comment    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  booking  Booking @relation(fields: [bookingId], references: [id])
+  customer User    @relation(fields: [customerId], references: [id])
+}
+
+// ---------- Notifications, auth tokens, audit ----------
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  message   String
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model AuthToken {
+  id        String        @id @default(uuid())
+  userId    String
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime      @db.Timestamptz(3)
+  usedAt    DateTime?     @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String // e.g. BOOKING_CREATED, TECHNICIAN_ASSIGNED
+  entityType String // e.g. Booking
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ---------- Business settings (single row, id = 1) ----------
+
+model BusinessSettings {
+  id                        Int      @id @default(1)
+  businessName              String   @default("HomeFix Appliance Services")
+  timezone                  String   @default("Asia/Kolkata")
+  slotIntervalMinutes       Int      @default(30)
+  bookingCutoffMinutes      Int      @default(120)
+  maxDaysAhead              Int      @default(30)
+  cancellationWindowMinutes Int      @default(240)
+  rescheduleWindowMinutes   Int      @default(240)
+  maxReschedules            Int      @default(2)
+  createdAt                 DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime @updatedAt @db.Timestamptz(3)
+}
